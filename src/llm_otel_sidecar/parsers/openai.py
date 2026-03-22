@@ -4,8 +4,8 @@ from typing import Any
 
 from llm_otel_sidecar.config import config
 from llm_otel_sidecar.parsers.base import ParsedSpan
+from llm_otel_sidecar.telemetry.conventions import UNKNOWN_MODEL
 
-UNKNOWN_MODEL = "unknown"
 PROVIDER = "openai"
 
 
