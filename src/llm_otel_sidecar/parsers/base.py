@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from typing import Any
 
 
 @dataclass
@@ -13,11 +14,11 @@ class ParsedSpan:
 
     provider: str  # "openai" | "anthropic"
     model: str  # e.g. "gpt-4o"
-    input_tokens: int | None
-    output_tokens: int | None
-    finish_reason: str | None
     latency_ms: float
     status_code: int
-    error_type: str | None  # set on non-2xx responses
     is_streaming: bool
-    request_messages: list[dict] | None  # captured for span events (optional)
+    input_tokens: int | None = None
+    output_tokens: int | None = None
+    finish_reason: str | None = None
+    error_type: str | None = None  # set on non-2xx responses
+    request_messages: list[dict[str, Any]] | None = None  # captured for span events (optional)
