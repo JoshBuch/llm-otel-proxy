@@ -7,6 +7,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
 
+    sidecar_host: str = Field(default="0.0.0.0")
     sidecar_port: int = Field(default=4000)
     otlp_endpoint: str = Field(default="http://localhost:4317")
     openai_upstream: str = Field(default="https://api.openai.com")
