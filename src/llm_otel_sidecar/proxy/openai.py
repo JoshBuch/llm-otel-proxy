@@ -1,18 +1,25 @@
 from __future__ import annotations
 
 import json
+import logging
 import time
 from typing import Any, AsyncIterator
 
 import httpx
 from fastapi import APIRouter, BackgroundTasks, Request, Response
 from fastapi.responses import StreamingResponse
+from starlette.background import BackgroundTask
 
 from llm_otel_sidecar.config import config
+from llm_otel_sidecar.parsers.base import ParsedSpan
 from llm_otel_sidecar.parsers.openai import parse_openai_response
 from llm_otel_sidecar.telemetry.emitter import emit_span
 
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/openai")
+
+UNKNOWN_MODEL = "unknown"
 
 # Module-level singleton httpx client
 _client = httpx.AsyncClient(
@@ -117,7 +124,6 @@ async def proxy_openai(
             headers=headers,
             body_bytes=body_bytes,
             request_dict=request_dict,
-            background_tasks=background_tasks,
         )
     else:
         return await _handle_non_streaming(
@@ -177,7 +183,6 @@ async def _handle_streaming(
     headers: dict[str, str],
     body_bytes: bytes,
     request_dict: dict[str, Any],
-    background_tasks: BackgroundTasks,
 ) -> StreamingResponse:
     """Forward a streaming request to upstream using SSE pass-through."""
     # Inject stream_options to include usage in the last chunk
@@ -193,10 +198,13 @@ async def _handle_streaming(
 
     start_time = time.monotonic()
 
+    # Mutable container so the generator can populate it and the background
+    # task can read it after the stream ends.
+    parsed_ref: list[ParsedSpan] = []
+
     async def stream_generator() -> AsyncIterator[bytes]:
         buffer: list[bytes] = []
         upstream_status: list[int] = []
-        upstream_resp_headers: list[httpx.Headers] = []
 
         try:
             async with _client.stream(
@@ -206,13 +214,21 @@ async def _handle_streaming(
                 headers=modified_headers,
             ) as upstream_response:
                 upstream_status.append(upstream_response.status_code)
-                upstream_resp_headers.append(upstream_response.headers)
                 async for chunk in upstream_response.aiter_bytes():
                     buffer.append(chunk)
                     yield chunk
         except httpx.TimeoutException:
-            yield b"data: upstream timeout\n\n"
-            return
+            logger.warning("Upstream timeout during streaming")
+            error_parsed = ParsedSpan(
+                provider="openai",
+                model=request_dict.get("model", UNKNOWN_MODEL),
+                latency_ms=(time.monotonic() - start_time) * 1000,
+                status_code=504,
+                is_streaming=True,
+                error_type="timeout",
+            )
+            parsed_ref.append(error_parsed)
+            return  # end the stream
 
         latency_ms = (time.monotonic() - start_time) * 1000
         response_dict = _parse_sse_buffer(buffer)
@@ -225,9 +241,16 @@ async def _handle_streaming(
             latency_ms=latency_ms,
             is_streaming=True,
         )
-        background_tasks.add_task(emit_span, parsed)
+        parsed_ref.append(parsed)
+
+    async def emit_after_stream() -> None:
+        if parsed_ref:
+            emit_span(parsed_ref[0])
+        else:
+            logger.warning("No parsed span available after stream")
 
     return StreamingResponse(
         stream_generator(),
         media_type="text/event-stream",
+        background=BackgroundTask(emit_after_stream),
     )
