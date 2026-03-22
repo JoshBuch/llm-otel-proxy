@@ -8,21 +8,22 @@ from __future__ import annotations
 
 import json
 from typing import Any
-from unittest.mock import patch
 
 import httpx
 import pytest
 import respx
 from fastapi.testclient import TestClient
 
+from llm_otel_sidecar.config import config
+from llm_otel_sidecar.parsers.base import ParsedSpan
 from llm_otel_sidecar.proxy.server import app
 
 # ---------------------------------------------------------------------------
 # Upstream base URLs
 # ---------------------------------------------------------------------------
 
-OPENAI_BASE = "https://api.openai.com"
-ANTHROPIC_BASE = "https://api.anthropic.com"
+OPENAI_BASE = config.openai_upstream.rstrip("/")
+ANTHROPIC_BASE = config.anthropic_upstream.rstrip("/")
 
 
 # ---------------------------------------------------------------------------
@@ -247,18 +248,26 @@ def test_openai_non_streaming_authorization_forwarded(client: TestClient) -> Non
 
 
 @respx.mock
-def test_openai_non_streaming_span_attributes(client: TestClient) -> None:
+def test_openai_non_streaming_span_attributes(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Full-flow span must carry the correct provider, model, tokens, finish_reason."""
+    captured: list[ParsedSpan] = []
+
+    def mock_emit(span: ParsedSpan) -> None:
+        captured.append(span)
+
+    monkeypatch.setattr("llm_otel_sidecar.proxy.openai.emit_span", mock_emit)
+
     respx.post(f"{OPENAI_BASE}/v1/chat/completions").mock(
         return_value=httpx.Response(200, json=_openai_chat_response())
     )
 
-    with patch("llm_otel_sidecar.proxy.openai.emit_span") as mock_emit:
-        resp = client.post("/openai/v1/chat/completions", json=_OPENAI_REQUEST)
+    resp = client.post("/openai/v1/chat/completions", json=_OPENAI_REQUEST)
 
     assert resp.status_code == 200
-    mock_emit.assert_called_once()
-    span = mock_emit.call_args[0][0]
+    assert len(captured) == 1
+    span = captured[0]
     assert span.provider == "openai"
     assert span.model == "gpt-4o-2024-05-13"
     assert span.input_tokens == 12
@@ -328,18 +337,26 @@ def test_anthropic_non_streaming_auth_headers_forwarded(client: TestClient) -> N
 
 
 @respx.mock
-def test_anthropic_non_streaming_span_attributes(client: TestClient) -> None:
+def test_anthropic_non_streaming_span_attributes(
+    client: TestClient, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Full-flow span must carry the correct provider, model, tokens, finish_reason."""
+    captured: list[ParsedSpan] = []
+
+    def mock_emit(span: ParsedSpan) -> None:
+        captured.append(span)
+
+    monkeypatch.setattr("llm_otel_sidecar.proxy.anthropic.emit_span", mock_emit)
+
     respx.post(f"{ANTHROPIC_BASE}/v1/messages").mock(
         return_value=httpx.Response(200, json=_anthropic_messages_response())
     )
 
-    with patch("llm_otel_sidecar.proxy.anthropic.emit_span") as mock_emit:
-        resp = client.post("/anthropic/v1/messages", json=_ANTHROPIC_REQUEST)
+    resp = client.post("/anthropic/v1/messages", json=_ANTHROPIC_REQUEST)
 
     assert resp.status_code == 200
-    mock_emit.assert_called_once()
-    span = mock_emit.call_args[0][0]
+    assert len(captured) == 1
+    span = captured[0]
     assert span.provider == "anthropic"
     assert span.model == "claude-3-opus-20240229"
     assert span.input_tokens == 12
@@ -427,6 +444,7 @@ def test_openai_streaming_chunks_arrive_in_order(client: TestClient) -> None:
     pos2 = body.index(b"chunk-two")
     pos3 = body.index(b"chunk-three")
     assert pos1 < pos2 < pos3
+    assert b"[DONE]" in body
 
 
 @respx.mock
