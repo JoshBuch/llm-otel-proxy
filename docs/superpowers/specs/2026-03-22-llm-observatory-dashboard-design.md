@@ -33,7 +33,8 @@ LLM Sidecar :4000          (unchanged)
     │ OTLP spans (gRPC)
     ▼
 OTel Collector :4317        (new — replaces Jaeger as OTLP receiver)
-    ├─ traces ──────────▶  Grafana Tempo :3200   (trace storage)
+    ├─ traces ──────────▶  Grafana Tempo :4318   (OTLP HTTP ingress)
+    │                      Grafana Tempo :3200   (query API — used by Grafana datasource)
     └─ spanmetrics ──────▶  Prometheus :9090      (metrics storage)
                                 │
                                 ▼
@@ -95,25 +96,28 @@ Default credentials: `admin / admin` (Grafana prompts to change on first login).
 Pre-built Grafana dashboard JSON with the following panel layout:
 
 **Row 1 — KPI stat panels (last 24h)**
-- Total Requests
-- Total Input Tokens
-- Total Output Tokens
-- p95 Latency
-- Error Rate %
+- Total Requests — source: Prometheus (`traces_span_metrics_calls_total`)
+- Total Input Tokens — source: Tempo TraceQL (`{ } | sum_over_time(span.gen_ai.usage.input_tokens)`)
+- Total Output Tokens — source: Tempo TraceQL (`{ } | sum_over_time(span.gen_ai.usage.output_tokens)`)
+- p95 Latency — source: Prometheus (histogram quantile on `traces_span_metrics_duration_milliseconds`)
+- Error Rate % — source: Prometheus (rate of `status_code="STATUS_CODE_ERROR"` calls)
 
 **Row 2 — Time series**
-- Input + Output Tokens per hour (stacked area chart)
-- Requests per minute
+- Input + Output Tokens per hour (stacked area) — source: Tempo TraceQL metrics (`sum_over_time`)
+- Requests per minute — source: Prometheus (`rate(traces_span_metrics_calls_total[1m])`)
 
 **Row 3 — Analysis**
-- Latency percentiles over time (p50 / p95 / p99)
-- Requests by model (horizontal bar chart)
-- Finish reasons distribution (stat panel with colour coding)
+- Latency percentiles over time (p50 / p95 / p99) — source: Prometheus histogram
+- Requests by model (horizontal bar chart) — source: Prometheus (`calls_total` by `gen_ai_request_model` label)
+- Finish reasons distribution (stat panel) — source: Prometheus (`calls_total` by `gen_ai_response_finish_reasons` label)
 
 **Row 4 — Trace exploration**
 - Grafana Explore link to Tempo trace search (pre-filtered to `llm-otel-sidecar` service)
 
-All panels use the `spanmetrics`-generated Prometheus metrics for aggregate views. The trace exploration link uses the Tempo datasource for individual span inspection.
+**Data source mapping:**
+- Request counts, latency percentiles, model/finish reason breakdowns → Prometheus (spanmetrics)
+- Token aggregates (sum of integer span attributes) → Tempo TraceQL metrics (requires Tempo 2.3+, which `grafana/tempo:latest` satisfies)
+- Individual trace inspection → Tempo datasource via Grafana Explore
 
 ---
 
