@@ -5,8 +5,8 @@ from typing import Any
 from llm_otel_sidecar.config import config
 from llm_otel_sidecar.parsers.base import ParsedSpan
 
-PROVIDER = "anthropic"
 UNKNOWN_MODEL = "unknown"
+PROVIDER = "anthropic"
 
 
 def parse_anthropic_response(

@@ -3,8 +3,6 @@ from __future__ import annotations
 from typing import Any
 from unittest.mock import patch
 
-import pytest
-
 from llm_otel_sidecar.parsers.anthropic import parse_anthropic_response
 
 
@@ -303,6 +301,17 @@ def test_2xx_error_type_is_none():
     )
 
     assert span.error_type is None
+
+
+def test_status_199_is_treated_as_error() -> None:
+    span = parse_anthropic_response(
+        request_body={"model": "claude-3-opus-20240229", "messages": []},
+        response_body={"error": {"type": "invalid_request_error"}},
+        status_code=199,
+        latency_ms=50.0,
+        is_streaming=False,
+    )
+    assert span.error_type == "invalid_request_error"
 
 
 # ---------------------------------------------------------------------------
