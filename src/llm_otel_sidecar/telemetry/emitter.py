@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import time
 from typing import Final
 
 from opentelemetry import trace
@@ -52,11 +53,15 @@ def _get_tracer() -> Tracer:
 def emit_span(parsed: ParsedSpan) -> None:
     """Build and export a single OTel span from a ParsedSpan. Never raises."""
     try:
-        tracer = _get_tracer()
-        with tracer.start_as_current_span(
+        end_time_ns = time.time_ns()
+        start_time_ns = end_time_ns - int(parsed.latency_ms * 1_000_000)
+
+        span = _get_tracer().start_span(
             name=f"{parsed.provider}.chat",
             kind=SpanKind.CLIENT,
-        ) as span:
+            start_time=start_time_ns,
+        )
+        try:
             span.set_attribute(GEN_AI_SYSTEM, parsed.provider)
             span.set_attribute(GEN_AI_OPERATION_NAME, OPERATION_CHAT)
             span.set_attribute(GEN_AI_REQUEST_MODEL, parsed.model)
@@ -85,5 +90,9 @@ def emit_span(parsed: ParsedSpan) -> None:
                     GEN_AI_CONTENT_PROMPT,
                     {GEN_AI_PROMPT: json.dumps(parsed.request_messages)},
                 )
+            span.end(end_time=end_time_ns)
+        except Exception:
+            span.end()
+            raise
     except Exception:
         logger.warning("emit_span failed", exc_info=True)

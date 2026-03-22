@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import json
 import logging
+from typing import Any
 
 import pytest
-from opentelemetry import trace
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
@@ -30,19 +30,16 @@ from llm_otel_sidecar.telemetry.conventions import (
 
 
 @pytest.fixture
-def memory_exporter() -> InMemorySpanExporter:
-    # Reset the global OTel provider so each test gets a fresh one.
-    trace._TRACER_PROVIDER_SET_ONCE._done = False  # type: ignore[attr-defined]
-    trace._TRACER_PROVIDER = None  # type: ignore[attr-defined]
-
+def memory_exporter(monkeypatch: pytest.MonkeyPatch) -> InMemorySpanExporter:
     exp = InMemorySpanExporter()
     provider = TracerProvider()
     provider.add_span_processor(SimpleSpanProcessor(exp))
-    trace.set_tracer_provider(provider)
+    test_tracer = provider.get_tracer("llm.proxy")
+    monkeypatch.setattr("llm_otel_sidecar.telemetry.emitter._get_tracer", lambda: test_tracer)
     return exp
 
 
-def _make_parsed(**kwargs) -> ParsedSpan:
+def _make_parsed(**kwargs: Any) -> ParsedSpan:
     defaults = dict(
         provider="openai",
         model="gpt-4o",
