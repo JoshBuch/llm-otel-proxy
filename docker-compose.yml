@@ -4,20 +4,69 @@ services:
     ports:
       - "4000:4000"
     environment:
-      - OTLP_ENDPOINT=http://jaeger:4317
+      - OTLP_ENDPOINT=http://otel-collector:4317
+      - OPENAI_UPSTREAM=https://models.inference.ai.azure.com
     depends_on:
-      jaeger:
+      otel-collector:
         condition: service_healthy
 
-  jaeger:
-    image: jaegertracing/all-in-one:latest
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - ./otel-collector.yml:/etc/otelcol/config.yaml
     ports:
-      - "16686:16686"   # Jaeger UI
-      - "4317:4317"     # OTLP gRPC receiver
-    environment:
-      - COLLECTOR_OTLP_ENABLED=true
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP
+      - "8889:8889"   # Prometheus metrics scrape
     healthcheck:
-      test: ["CMD-SHELL", "wget --quiet --tries=1 --spider http://localhost:14269/ || exit 1"]
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:13133/"]
       interval: 5s
       timeout: 3s
       retries: 10
+    depends_on:
+      tempo:
+        condition: service_healthy
+
+  tempo:
+    image: grafana/tempo:latest
+    command: ["-config.file=/etc/tempo.yml"]
+    volumes:
+      - ./tempo.yml:/etc/tempo.yml
+      - tempo-data:/var/tempo
+    ports:
+      - "3200:3200"   # Tempo query API
+      - "4319:4318"   # OTLP HTTP ingress (mapped to avoid conflict with collector's 4318)
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:3200/ready"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  prometheus:
+    image: prom/prometheus:latest
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.retention.time=7d"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    ports:
+      - "9090:9090"
+
+  grafana:
+    image: grafana/grafana:latest
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
+      - tempo
+
+volumes:
+  tempo-data:
+  prometheus-data:
+  grafana-data:

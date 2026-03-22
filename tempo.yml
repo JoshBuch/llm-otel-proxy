@@ -18,6 +18,9 @@ storage:
     wal:
       path: /var/tempo/wal
 
+ingester:
+  max_block_duration: 30s
+
 compactor:
   compaction:
     block_retention: 24h
