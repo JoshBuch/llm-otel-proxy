@@ -13,7 +13,8 @@ class ParsedSpan:
     """
 
     provider: str  # "openai" | "anthropic"
-    model: str  # e.g. "gpt-4o"
+    request_model: str  # model sent in the request, e.g. "gpt-4o"
+    response_model: str  # model reported in the response (may differ from request)
     latency_ms: float
     status_code: int
     is_streaming: bool

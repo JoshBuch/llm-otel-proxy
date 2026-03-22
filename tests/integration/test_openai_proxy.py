@@ -137,7 +137,8 @@ def test_non_streaming_span_emitted(client: TestClient) -> None:
     mock_emit.assert_called_once()
     span = mock_emit.call_args[0][0]
     assert span.provider == "openai"
-    assert span.model == "gpt-4o-2024-05-13"
+    assert span.request_model == "gpt-4o"
+    assert span.response_model == "gpt-4o-2024-05-13"
     assert span.input_tokens == 10
     assert span.output_tokens == 20
     assert span.finish_reason == "stop"
@@ -201,7 +202,8 @@ def test_streaming_span_emitted_after_stream_ends(client: TestClient) -> None:
     span = mock_emit.call_args[0][0]
     assert span.is_streaming is True
     assert span.provider == "openai"
-    assert span.model == "gpt-4o-2024-05-13"
+    assert span.request_model == "gpt-4o"
+    assert span.response_model == "gpt-4o-2024-05-13"
     assert span.finish_reason == "stop"
     assert span.input_tokens == 8
     assert span.output_tokens == 3

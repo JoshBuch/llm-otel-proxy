@@ -3,7 +3,7 @@ from __future__ import annotations
 import json
 import logging
 import time
-from typing import Any, AsyncIterator
+from typing import Any, AsyncGenerator
 
 import httpx
 from fastapi import APIRouter, BackgroundTasks, Request, Response
@@ -12,7 +12,7 @@ from starlette.background import BackgroundTask
 
 from llm_otel_sidecar.config import config
 from llm_otel_sidecar.parsers.base import ParsedSpan
-from llm_otel_sidecar.parsers.anthropic import parse_anthropic_response
+from llm_otel_sidecar.parsers.anthropic import parse_anthropic_response, PROVIDER as ANTHROPIC_PROVIDER
 from llm_otel_sidecar.telemetry.emitter import emit_span
 from llm_otel_sidecar.telemetry.conventions import UNKNOWN_MODEL
 
@@ -205,42 +205,76 @@ async def _handle_streaming(
     # task can read it after the stream ends.
     parsed_ref: list[ParsedSpan] = []
 
-    async def stream_generator() -> AsyncIterator[bytes]:
-        buffer: list[bytes] = []
-        upstream_status: list[int] = []
+    # Send the request with streaming=True to get headers upfront before
+    # constructing StreamingResponse, while keeping the body open for the
+    # generator to consume.
+    try:
+        upstream_req = _client.build_request(
+            "POST",
+            upstream_url,
+            content=body_bytes,
+            headers=headers,
+        )
+        upstream_response = await _client.send(upstream_req, stream=True)
+    except httpx.TimeoutException:
+        logger.warning("Upstream timeout before streaming started")
+        error_parsed = ParsedSpan(
+            provider=ANTHROPIC_PROVIDER,
+            request_model=request_dict.get("model", UNKNOWN_MODEL),
+            response_model=request_dict.get("model", UNKNOWN_MODEL),
+            latency_ms=(time.monotonic() - start_time) * 1000,
+            status_code=504,
+            is_streaming=True,
+            error_type="timeout",
+        )
 
+        async def _empty_generator() -> AsyncGenerator[bytes, None]:
+            return
+            yield  # make it a generator
+
+        async def _emit_error() -> None:
+            emit_span(error_parsed)
+
+        return StreamingResponse(
+            _empty_generator(),
+            status_code=504,
+            media_type="text/event-stream",
+            background=BackgroundTask(_emit_error),
+        )
+
+    upstream_status = upstream_response.status_code
+    upstream_headers = _build_response_headers(upstream_response.headers)
+
+    async def stream_generator() -> AsyncGenerator[bytes, None]:
+        buffer: list[bytes] = []
         try:
-            async with _client.stream(
-                "POST",
-                upstream_url,
-                content=body_bytes,
-                headers=headers,
-            ) as upstream_response:
-                upstream_status.append(upstream_response.status_code)
+            try:
                 async for chunk in upstream_response.aiter_bytes():
                     buffer.append(chunk)
                     yield chunk
-        except httpx.TimeoutException:
-            logger.warning("Upstream timeout during streaming")
-            error_parsed = ParsedSpan(
-                provider="anthropic",
-                model=request_dict.get("model", UNKNOWN_MODEL),
-                latency_ms=(time.monotonic() - start_time) * 1000,
-                status_code=504,
-                is_streaming=True,
-                error_type="timeout",
-            )
-            parsed_ref.append(error_parsed)
-            return  # end the stream
+            except httpx.TimeoutException:
+                logger.warning("Upstream timeout during streaming")
+                error_parsed = ParsedSpan(
+                    provider=ANTHROPIC_PROVIDER,
+                    request_model=request_dict.get("model", UNKNOWN_MODEL),
+                    response_model=request_dict.get("model", UNKNOWN_MODEL),
+                    latency_ms=(time.monotonic() - start_time) * 1000,
+                    status_code=504,
+                    is_streaming=True,
+                    error_type="timeout",
+                )
+                parsed_ref.append(error_parsed)
+                return  # end the stream
+        finally:
+            await upstream_response.aclose()
 
         latency_ms = (time.monotonic() - start_time) * 1000
         response_dict = _parse_sse_buffer(buffer)
-        status_code = upstream_status[0] if upstream_status else 200
 
         parsed = parse_anthropic_response(
             request_body=request_dict,
             response_body=response_dict,
-            status_code=status_code,
+            status_code=upstream_status,
             latency_ms=latency_ms,
             is_streaming=True,
         )
@@ -254,6 +288,8 @@ async def _handle_streaming(
 
     return StreamingResponse(
         stream_generator(),
+        status_code=upstream_status,
         media_type="text/event-stream",
+        headers=upstream_headers,
         background=BackgroundTask(emit_after_stream),
     )

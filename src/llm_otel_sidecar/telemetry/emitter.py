@@ -64,8 +64,8 @@ def emit_span(parsed: ParsedSpan) -> None:
         try:
             span.set_attribute(GEN_AI_SYSTEM, parsed.provider)
             span.set_attribute(GEN_AI_OPERATION_NAME, OPERATION_CHAT)
-            span.set_attribute(GEN_AI_REQUEST_MODEL, parsed.model)
-            span.set_attribute(GEN_AI_RESPONSE_MODEL, parsed.model)
+            span.set_attribute(GEN_AI_REQUEST_MODEL, parsed.request_model)
+            span.set_attribute(GEN_AI_RESPONSE_MODEL, parsed.response_model)
             span.set_attribute(HTTP_RESPONSE_STATUS_CODE, parsed.status_code)
 
             server_address = _PROVIDER_HOSTS.get(parsed.provider, "")

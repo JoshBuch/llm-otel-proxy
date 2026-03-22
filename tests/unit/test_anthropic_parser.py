@@ -46,7 +46,8 @@ def test_non_streaming_all_fields():
     )
 
     assert span.provider == "anthropic"
-    assert span.model == "claude-3-5-sonnet-20241022"
+    assert span.request_model == "claude-3-5-sonnet-20241022"
+    assert span.response_model == "claude-3-5-sonnet-20241022"
     assert span.latency_ms == 123.4
     assert span.status_code == 200
     assert span.is_streaming is False
@@ -85,7 +86,8 @@ def test_streaming_stop_reason_from_delta():
     )
 
     assert span.provider == "anthropic"
-    assert span.model == "claude-3-5-sonnet-20241022"
+    assert span.request_model == "claude-3-5-sonnet-20241022"
+    assert span.response_model == "claude-3-5-sonnet-20241022"
     assert span.is_streaming is True
     assert span.input_tokens == 15
     assert span.output_tokens == 25
@@ -229,7 +231,7 @@ def test_model_absent_in_response_falls_back_to_request():
         is_streaming=False,
     )
 
-    assert span.model == "claude-3-5-sonnet-20241022"
+    assert span.response_model == "claude-3-5-sonnet-20241022"
 
 
 def test_model_absent_everywhere_returns_unknown():
@@ -249,7 +251,8 @@ def test_model_absent_everywhere_returns_unknown():
         is_streaming=False,
     )
 
-    assert span.model == "unknown"
+    assert span.request_model == "unknown"
+    assert span.response_model == "unknown"
 
 
 # ---------------------------------------------------------------------------

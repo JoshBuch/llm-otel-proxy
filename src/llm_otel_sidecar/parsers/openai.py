@@ -22,7 +22,8 @@ def parse_openai_response(
     response dicts (i.e. the dict reconstructed after the [DONE] SSE event).
     """
     # --- model -----------------------------------------------------------
-    model: str = response_body.get("model") or request_body.get("model") or UNKNOWN_MODEL
+    request_model: str = request_body.get("model") or UNKNOWN_MODEL
+    response_model: str = response_body.get("model") or request_body.get("model") or UNKNOWN_MODEL
 
     # --- token usage -----------------------------------------------------
     usage: dict[str, Any] | None = response_body.get("usage")
@@ -49,7 +50,8 @@ def parse_openai_response(
 
     return ParsedSpan(
         provider=PROVIDER,
-        model=model,
+        request_model=request_model,
+        response_model=response_model,
         latency_ms=latency_ms,
         status_code=status_code,
         is_streaming=is_streaming,

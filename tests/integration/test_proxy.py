@@ -269,7 +269,8 @@ def test_openai_non_streaming_span_attributes(
     assert len(captured) == 1
     span = captured[0]
     assert span.provider == "openai"
-    assert span.model == "gpt-4o-2024-05-13"
+    assert span.request_model == "gpt-4o"
+    assert span.response_model == "gpt-4o-2024-05-13"
     assert span.input_tokens == 12
     assert span.output_tokens == 25
     assert span.finish_reason == "stop"
@@ -358,7 +359,8 @@ def test_anthropic_non_streaming_span_attributes(
     assert len(captured) == 1
     span = captured[0]
     assert span.provider == "anthropic"
-    assert span.model == "claude-3-opus-20240229"
+    assert span.request_model == "claude-3-opus-20240229"
+    assert span.response_model == "claude-3-opus-20240229"
     assert span.input_tokens == 12
     assert span.output_tokens == 25
     assert span.finish_reason == "end_turn"

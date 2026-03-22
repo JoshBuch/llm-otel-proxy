@@ -24,7 +24,8 @@ def parse_anthropic_response(
     may appear at response_body["stop_reason"] or response_body["delta"]["stop_reason"].
     """
     # --- model -----------------------------------------------------------
-    model: str = response_body.get("model") or request_body.get("model") or UNKNOWN_MODEL
+    request_model: str = request_body.get("model") or UNKNOWN_MODEL
+    response_model: str = response_body.get("model") or request_body.get("model") or UNKNOWN_MODEL
 
     # --- token usage -----------------------------------------------------
     usage: dict[str, Any] | None = response_body.get("usage")
@@ -54,7 +55,8 @@ def parse_anthropic_response(
 
     return ParsedSpan(
         provider=PROVIDER,
-        model=model,
+        request_model=request_model,
+        response_model=response_model,
         latency_ms=latency_ms,
         status_code=status_code,
         is_streaming=is_streaming,

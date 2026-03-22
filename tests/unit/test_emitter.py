@@ -42,7 +42,8 @@ def memory_exporter(monkeypatch: pytest.MonkeyPatch) -> InMemorySpanExporter:
 def _make_parsed(**kwargs: Any) -> ParsedSpan:
     defaults = dict(
         provider="openai",
-        model="gpt-4o",
+        request_model="gpt-4o",
+        response_model="gpt-4o",
         latency_ms=123.4,
         status_code=200,
         is_streaming=False,
@@ -185,7 +186,11 @@ def test_finish_reason_is_list(memory_exporter: InMemorySpanExporter) -> None:
 # ---------------------------------------------------------------------------
 
 def test_anthropic_server_address(memory_exporter: InMemorySpanExporter) -> None:
-    parsed = _make_parsed(provider="anthropic", model="claude-3-5-sonnet-20241022")
+    parsed = _make_parsed(
+        provider="anthropic",
+        request_model="claude-3-5-sonnet-20241022",
+        response_model="claude-3-5-sonnet-20241022",
+    )
     emitter.emit_span(parsed)
 
     span = memory_exporter.get_finished_spans()[0]

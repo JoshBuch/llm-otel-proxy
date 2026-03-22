@@ -140,7 +140,8 @@ def test_non_streaming_span_emitted(client: TestClient) -> None:
     mock_emit.assert_called_once()
     span = mock_emit.call_args[0][0]
     assert span.provider == "anthropic"
-    assert span.model == "claude-3-opus-20240229"
+    assert span.request_model == "claude-3-opus-20240229"
+    assert span.response_model == "claude-3-opus-20240229"
     assert span.input_tokens == 10
     assert span.output_tokens == 20
     assert span.finish_reason == "end_turn"
@@ -205,7 +206,8 @@ def test_streaming_span_emitted_after_stream_ends(client: TestClient) -> None:
     span = mock_emit.call_args[0][0]
     assert span.is_streaming is True
     assert span.provider == "anthropic"
-    assert span.model == "claude-3-opus-20240229"
+    assert span.request_model == "claude-3-opus-20240229"
+    assert span.response_model == "claude-3-opus-20240229"
     assert span.finish_reason == "end_turn"
     assert span.input_tokens == 8
     assert span.output_tokens == 3
@@ -288,8 +290,8 @@ def test_upstream_timeout_streaming_emits_error_span(client: TestClient) -> None
     with patch("llm_otel_sidecar.proxy.anthropic.emit_span") as mock_emit:
         resp = client.post("/anthropic/v1/messages", json=_STREAMING_REQUEST)
 
-    # Stream should end without raising
-    assert resp.status_code == 200
+    # Stream should end without raising; status reflects the upstream timeout
+    assert resp.status_code == 504
     mock_emit.assert_called_once()
     span = mock_emit.call_args[0][0]
     assert span.status_code == 504
