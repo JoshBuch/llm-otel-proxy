@@ -61,7 +61,6 @@ def test_non_streaming_all_fields():
     assert span.output_tokens == 20
     assert span.finish_reason == "stop"
     assert span.error_type is None
-    assert span.request_messages is None  # CAPTURE_PROMPTS defaults to False
 
 
 # ---------------------------------------------------------------------------

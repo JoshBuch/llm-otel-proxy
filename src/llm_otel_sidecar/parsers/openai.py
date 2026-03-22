@@ -5,6 +5,7 @@ from typing import Any
 from llm_otel_sidecar.config import config
 from llm_otel_sidecar.parsers.base import ParsedSpan
 
+UNKNOWN_MODEL = "unknown"
 PROVIDER = "openai"
 
 
@@ -21,7 +22,7 @@ def parse_openai_response(
     response dicts (i.e. the dict reconstructed after the [DONE] SSE event).
     """
     # --- model -----------------------------------------------------------
-    model: str = response_body.get("model") or request_body.get("model") or "unknown"
+    model: str = response_body.get("model") or request_body.get("model") or UNKNOWN_MODEL
 
     # --- token usage -----------------------------------------------------
     usage: dict[str, Any] | None = response_body.get("usage")
