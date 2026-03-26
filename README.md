@@ -33,7 +33,7 @@ OPENAI_BASE_URL=http://localhost:4000/openai
 
 A full **LLM Observatory** dashboard out of the box:
 
-![LLM Observatory Dashboard](docs/screenshots/dashboard-full.png)
+![LLM Observatory Dashboard](docs/screenshots/dashboard-full.jpg)
 
 | Panel | What it shows |
 |---|---|
@@ -66,30 +66,58 @@ Span: openai.chat  [200 OK, 1.4s]
 
 ## Quickstart
 
+### Prerequisites
+
+- [Docker](https://docs.docker.com/get-docker/) and [Docker Compose](https://docs.docker.com/compose/install/) (v2+)
+- An OpenAI or Anthropic API key
+
+### Step 1 — Clone and start the stack
+
 ```bash
 git clone https://github.com/JoshBuch/llm-otel-proxy.git
 cd llm-otel-proxy
 docker compose up
 ```
 
-That's it. The full stack comes up:
+Wait ~15 seconds for all services to be healthy. You'll see log lines from `sidecar`, `otel-collector`, `tempo`, `prometheus`, and `grafana`.
+
+### Step 2 — Open the dashboard
+
+Navigate to **[http://localhost:30025](http://localhost:30025)** and log in with `admin` / `admin`.
+
+The **LLM Observatory** dashboard is pre-provisioned — no setup needed.
 
 | Service | URL | Purpose |
 |---|---|---|
 | **Proxy** | `http://localhost:4000` | Drop-in LLM endpoint |
-| **Grafana** | `http://localhost:3000` | Pre-built dashboard (admin/admin) |
+| **Grafana** | `http://localhost:30025` | Pre-built dashboard (admin/admin) |
 | **Tempo** | `http://localhost:3200` | Distributed trace storage |
 | **Prometheus** | `http://localhost:9090` | Span metrics |
 
-Then point your app at the proxy — **no other changes**:
+### Step 3 — Point your app at the proxy
+
+Set the base URL environment variable — **no other changes to your code**:
 
 ```bash
 # OpenAI
 export OPENAI_BASE_URL=http://localhost:4000/openai/v1
+export OPENAI_API_KEY=sk-...
 
 # Anthropic
 export ANTHROPIC_BASE_URL=http://localhost:4000/anthropic
+export ANTHROPIC_API_KEY=sk-ant-...
 ```
+
+### Step 4 — Make a call and watch it appear
+
+```bash
+curl http://localhost:4000/openai/v1/chat/completions \
+  -H "Authorization: Bearer $OPENAI_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"model":"gpt-4o","messages":[{"role":"user","content":"Hi"}]}'
+```
+
+Within seconds, the Grafana dashboard updates with token counts, latency, and a trace in Tempo.
 
 ---
 
@@ -97,6 +125,7 @@ export ANTHROPIC_BASE_URL=http://localhost:4000/anthropic
 
 **Python — OpenAI**
 ```python
+import os
 from openai import OpenAI
 
 client = OpenAI(
@@ -107,16 +136,24 @@ response = client.chat.completions.create(
     model="gpt-4o",
     messages=[{"role": "user", "content": "Hello"}],
 )
+print(response.choices[0].message.content)
 ```
 
 **Python — Anthropic**
 ```python
+import os
 import anthropic
 
 client = anthropic.Anthropic(
     api_key=os.environ["ANTHROPIC_API_KEY"],
     base_url="http://localhost:4000/anthropic",  # only change
 )
+message = client.messages.create(
+    model="claude-opus-4-5",
+    max_tokens=1024,
+    messages=[{"role": "user", "content": "Hello"}],
+)
+print(message.content[0].text)
 ```
 
 **TypeScript / Node.js**
@@ -124,7 +161,13 @@ client = anthropic.Anthropic(
 import OpenAI from "openai";
 
 const client = new OpenAI({
+  apiKey: process.env.OPENAI_API_KEY,
   baseURL: "http://localhost:4000/openai/v1",  // only change
+});
+
+const response = await client.chat.completions.create({
+  model: "gpt-4o",
+  messages: [{ role: "user", content: "Hello" }],
 });
 ```
 
@@ -187,16 +230,22 @@ All configuration is via environment variables — no config files to edit.
 | `LOG_LEVEL` | `INFO` | Python log level |
 | `CAPTURE_PROMPTS` | `false` | Attach full prompt/completion text as span events (privacy opt-in) |
 
-`CAPTURE_PROMPTS=true` adds `gen_ai.content.prompt` and `gen_ai.content.completion` span events. **Off by default** — turn on only in environments where you're comfortable storing prompt content.
+### Capturing prompt content
+
+```bash
+CAPTURE_PROMPTS=true docker compose up
+```
+
+This adds `gen_ai.content.prompt` and `gen_ai.content.completion` span events visible in Tempo traces. **Off by default** — enable only in environments where storing prompt content is acceptable.
 
 ---
 
 ## Send traces to your existing backend
 
-The proxy ships spans via OTLP gRPC. `OTLP_ENDPOINT` works with any OTLP-compatible collector:
+The proxy emits spans via standard OTLP gRPC. Set `OTLP_ENDPOINT` to route to any collector:
 
 ```bash
-# Grafana Cloud (replace with your endpoint)
+# Grafana Cloud
 OTLP_ENDPOINT=https://otlp-gateway-prod-eu-west-0.grafana.net/otlp
 
 # Honeycomb
@@ -213,16 +262,27 @@ OTLP_ENDPOINT=http://localhost:4317
 OTLP_ENDPOINT=http://tempo:4317
 ```
 
+To override without rebuilding the image:
+
+```bash
+OTLP_ENDPOINT=http://your-collector:4317 docker compose up
+```
+
 ---
 
 ## Run without Docker
 
 ```bash
+# Install
+git clone https://github.com/JoshBuch/llm-otel-proxy.git
+cd llm-otel-proxy
 pip install -e ".[dev]"
 
-# Point at any OTLP backend
+# Start (point at any OTLP backend)
 OTLP_ENDPOINT=http://localhost:4317 python -m llm_otel_sidecar
 ```
+
+The proxy starts on port `4000` by default. You're responsible for providing your own OTel collector, Tempo, Prometheus, and Grafana if running outside Docker.
 
 ---
 
@@ -238,6 +298,15 @@ OTLP_ENDPOINT=http://localhost:4317 python -m llm_otel_sidecar
 | OTel GenAI semconv | **Yes** (native) | Rarely |
 
 Platform engineers can instrument an entire fleet of services by changing one env var per deployment — no application code PRs required.
+
+---
+
+## Supported providers
+
+| Provider | Path | Non-streaming | Streaming | Token tracking |
+|---|---|---|---|---|
+| OpenAI | `/openai/v1/chat/completions` | ✅ | ✅ | ✅ |
+| Anthropic | `/anthropic/v1/messages` | ✅ | ✅ | ✅ |
 
 ---
 
@@ -257,14 +326,9 @@ pytest tests/integration/
 pytest
 ```
 
+See [ARCHITECTURE.md](ARCHITECTURE.md) for a full walkthrough of every component.
+
 ---
-
-## Supported providers
-
-| Provider | Non-streaming | Streaming | Token tracking |
-|---|---|---|---|
-| OpenAI (`/v1/chat/completions`) | ✅ | ✅ | ✅ |
-| Anthropic (`/v1/messages`) | ✅ | ✅ | ✅ |
 
 ## Roadmap
 
@@ -282,7 +346,19 @@ pytest
 
 Issues and PRs welcome. The codebase is intentionally small — the core proxy is ~200 lines across `proxy/openai.py` and `proxy/anthropic.py`.
 
-See [ARCHITECTURE.md](ARCHITECTURE.md) for a full walkthrough of how each component fits together.
+```
+src/llm_otel_sidecar/
+├── config.py            # env var settings
+├── proxy/
+│   ├── openai.py        # /openai/* handler
+│   └── anthropic.py     # /anthropic/* handler
+├── parsers/
+│   ├── openai.py        # extract semconv fields from OpenAI response
+│   └── anthropic.py     # same for Anthropic
+└── telemetry/
+    ├── conventions.py   # GenAI semconv attribute constants
+    └── emitter.py       # build + export OTel spans
+```
 
 ---
 

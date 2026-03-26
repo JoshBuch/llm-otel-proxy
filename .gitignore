@@ -14,3 +14,4 @@ claude.md
 
 # Internal tooling docs
 docs/superpowers/
+.playwright-mcp/
