@@ -8,7 +8,7 @@ services:
       - OPENAI_UPSTREAM=https://models.inference.ai.azure.com
     depends_on:
       otel-collector:
-        condition: service_healthy
+        condition: service_started
 
   otel-collector:
     image: otel/opentelemetry-collector-contrib:latest
@@ -19,17 +19,13 @@ services:
       - "4317:4317"   # OTLP gRPC
       - "4318:4318"   # OTLP HTTP
       - "8889:8889"   # Prometheus metrics scrape
-    healthcheck:
-      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:13133/"]
-      interval: 5s
-      timeout: 3s
-      retries: 10
+    restart: on-failure
     depends_on:
       tempo:
         condition: service_healthy
 
   tempo:
-    image: grafana/tempo:latest
+    image: grafana/tempo:2.8.0
     command: ["-config.file=/etc/tempo.yml"]
     volumes:
       - ./tempo.yml:/etc/tempo.yml
@@ -61,7 +57,7 @@ services:
       - ./grafana/dashboards:/var/lib/grafana/dashboards
       - grafana-data:/var/lib/grafana
     ports:
-      - "3000:3000"
+      - "30025:3000"
     depends_on:
       - prometheus
       - tempo

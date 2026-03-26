@@ -1,4 +1,4 @@
-# Architecture — LLM OTel Sidecar
+# Architecture — llm-otel-proxy
 
 ## System Overview
 
@@ -20,17 +20,18 @@
 └─────────┼────────────────────────────────────-┼─────────────────┘
           │                                      │
           ▼                                      ▼
-  ┌───────────────┐                   ┌──────────────────────┐
-  │  OpenAI API   │                   │  OTLP Collector      │
-  │  Anthropic API│                   │  (Jaeger all-in-one) │
-  └───────────────┘                   └──────────────────────┘
+  ┌───────────────┐                   ┌──────────────────────────────────┐
+  │  OpenAI API   │                   │  OTel Collector (contrib)        │
+  │  Anthropic API│                   │  → Grafana Tempo  (traces)       │
+  └───────────────┘                   │  → Prometheus     (span metrics) │
+                                      │  → Grafana        (dashboard)    │
+                                      └──────────────────────────────────┘
 ```
 
 ## Repository Structure
 
 ```
-llm-otel-sidecar/
-├── claude.md                    # Claude Code context (read first)
+llm-otel-proxy/
 ├── PRD.md
 ├── ARCHITECTURE.md
 │
@@ -64,7 +65,7 @@ llm-otel-sidecar/
 │   └── integration/
 │       └── test_proxy.py        # Uses httpx.AsyncClient against live proxy
 │
-├── docker-compose.yml           # sidecar + jaeger-all-in-one
+├── docker-compose.yml           # sidecar + otel-collector + tempo + prometheus + grafana
 ├── Dockerfile
 ├── pyproject.toml
 └── README.md
@@ -212,26 +213,17 @@ Spec: https://opentelemetry.io/docs/specs/semconv/gen-ai/
 
 ## Docker Compose Setup
 
-```yaml
-# docker-compose.yml
-services:
-  sidecar:
-    build: .
-    ports:
-      - "4000:4000"
-    environment:
-      - OTLP_ENDPOINT=http://jaeger:4317
-    depends_on:
-      - jaeger
+The bundled `docker-compose.yml` starts:
 
-  jaeger:
-    image: jaegertracing/all-in-one:latest
-    ports:
-      - "16686:16686"   # Jaeger UI
-      - "4317:4317"     # OTLP gRPC receiver
-    environment:
-      - COLLECTOR_OTLP_ENABLED=true
-```
+| Service | Image | Purpose |
+|---|---|---|
+| `sidecar` | local build | The proxy itself |
+| `otel-collector` | otel/opentelemetry-collector-contrib | Receives OTLP spans; routes to Tempo + Prometheus |
+| `tempo` | grafana/tempo:2.8.0 | Distributed trace storage + TraceQL |
+| `prometheus` | prom/prometheus | Span metrics (requests, latency, tokens) |
+| `grafana` | grafana/grafana | Pre-provisioned LLM Observatory dashboard |
+
+Dashboard available at `http://localhost:30025` after `docker compose up`.
 
 ## Key Dependencies
 

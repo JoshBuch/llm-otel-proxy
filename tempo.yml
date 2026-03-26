@@ -7,8 +7,6 @@ distributor:
       protocols:
         http:
           endpoint: 0.0.0.0:4318
-        grpc:
-          endpoint: 0.0.0.0:9095
 
 storage:
   trace:
@@ -18,9 +16,23 @@ storage:
     wal:
       path: /var/tempo/wal
 
-ingester:
-  max_block_duration: 30s
+query_frontend:
+  metrics:
+    max_duration: 24h
 
-compactor:
-  compaction:
-    block_retention: 24h
+metrics_generator:
+  storage:
+    path: /var/tempo/generator/wal
+  traces_storage:
+    path: /var/tempo/generator/traces
+  processor:
+    local_blocks:
+      max_live_traces: 50000
+      flush_check_period: 500ms
+      trace_idle_period: 10s
+      complete_block_timeout: 15m
+
+overrides:
+  defaults:
+    metrics_generator:
+      processors: [local-blocks]

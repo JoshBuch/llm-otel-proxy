@@ -7,3 +7,10 @@ __pycache__/
 dist/
 build/
 .env
+
+# Claude Code context files — internal only
+CLAUDE.md
+claude.md
+
+# Internal tooling docs
+docs/superpowers/

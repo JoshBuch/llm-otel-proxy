@@ -17,6 +17,19 @@ connectors:
       explicit:
         buckets: [100, 250, 500, 1000, 2000, 5000]
 
+  sum:
+    spans:
+      llm_input_tokens_total:
+        source_attribute: gen_ai.usage.input_tokens
+        attributes:
+          - key: gen_ai.system
+          - key: gen_ai.request.model
+      llm_output_tokens_total:
+        source_attribute: gen_ai.usage.output_tokens
+        attributes:
+          - key: gen_ai.system
+          - key: gen_ai.request.model
+
 processors:
   batch:
 
@@ -36,8 +49,8 @@ service:
     traces:
       receivers: [otlp]
       processors: [batch]
-      exporters: [otlphttp/tempo, spanmetrics]
+      exporters: [otlphttp/tempo, spanmetrics, sum]
     metrics:
-      receivers: [spanmetrics]
+      receivers: [spanmetrics, sum]
       processors: [batch]
       exporters: [prometheus]
