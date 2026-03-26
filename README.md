@@ -288,10 +288,10 @@ The proxy starts on port `4000` by default. You're responsible for providing you
 
 ## Why not just use an SDK wrapper?
 
-| | llm-otel-proxy | Langfuse / Langtrace / Helicone |
+| | llm-otel-proxy | Typical SDK wrapper |
 |---|---|---|
-| Code changes required | **None** | SDK wrapping at every callsite |
-| Works with any language | **Yes** | Python / JS only (mostly) |
+| Code changes required | **None** | Wrapping at every callsite |
+| Works with any language | **Yes** | Usually Python / JS only |
 | Vendor lock-in | **None** (OTLP standard) | Proprietary format / SaaS |
 | Self-hostable | **Yes** | Partial / complex |
 | Streaming support | **Yes** | Varies |
