@@ -13,7 +13,7 @@ Every LLM observability tool today asks you to wrap your SDK:
 
 ```python
 # What every tool asks you to do
-with langfuse.trace() as t:
+with <tool_name>.trace() as t:
     response = client.chat.completions.create(...)  # 😩 touching every callsite
 ```
 
