@@ -44,7 +44,7 @@
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
         {
-          "expr": "sum(increase(llm_input_tokens_total[$__range]))",
+          "expr": "sum(llm_input_tokens_total)",
           "legendFormat": "input tokens",
           "refId": "A"
         }
@@ -71,7 +71,7 @@
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
         {
-          "expr": "sum(increase(llm_output_tokens_total[$__range]))",
+          "expr": "sum(llm_output_tokens_total)",
           "legendFormat": "output tokens",
           "refId": "A"
         }
@@ -130,7 +130,7 @@
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
         {
-          "expr": "sum(rate(traces_span_metrics_calls_total{status_code=\"STATUS_CODE_ERROR\"}[5m])) / sum(rate(traces_span_metrics_calls_total[5m])) * 100",
+          "expr": "(sum(rate(traces_span_metrics_calls_total{status_code=\"STATUS_CODE_ERROR\"}[5m])) or vector(0)) / sum(rate(traces_span_metrics_calls_total[5m])) * 100",
           "legendFormat": "error %",
           "refId": "A"
         }
@@ -233,22 +233,57 @@
     },
     {
       "id": 9,
-      "type": "barchart",
+      "type": "table",
       "title": "Requests by Model",
       "gridPos": { "x": 10, "y": 12, "w": 7, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
       "targets": [
         {
-          "expr": "sort_desc(sum by (gen_ai_request_model) (increase(traces_span_metrics_calls_total[$__range])))",
+          "expr": "sum by (gen_ai_request_model) (increase(traces_span_metrics_calls_total[$__range]))",
           "legendFormat": "{{ gen_ai_request_model }}",
+          "instant": true,
+          "format": "table",
           "refId": "A"
         }
       ],
-      "options": { "orientation": "horizontal" }
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": { "Time": true },
+            "renameByName": {
+              "gen_ai_request_model": "Model",
+              "Value": "Requests"
+            }
+          }
+        },
+        {
+          "id": "sortBy",
+          "options": { "fields": [{ "displayName": "Requests", "desc": true }] }
+        }
+      ],
+      "options": {
+        "sortBy": [{ "displayName": "Requests", "desc": true }],
+        "footer": { "show": false }
+      },
+      "fieldConfig": {
+        "defaults": { "custom": { "align": "left" } },
+        "overrides": [
+          {
+            "matcher": { "id": "byName", "options": "Requests" },
+            "properties": [
+              { "id": "custom.displayMode", "value": "color-background" },
+              { "id": "color", "value": { "mode": "continuous-GrYlRd" } },
+              { "id": "custom.align", "value": "right" },
+              { "id": "decimals", "value": 0 }
+            ]
+          }
+        ]
+      }
     },
     {
       "id": 10,
-      "type": "stat",
+      "type": "piechart",
       "title": "Finish Reasons",
       "gridPos": { "x": 17, "y": 12, "w": 7, "h": 8 },
       "datasource": { "type": "prometheus", "uid": "prometheus" },
@@ -260,9 +295,9 @@
         }
       ],
       "options": {
-        "reduceOptions": { "calcs": ["lastNotNull"] },
-        "orientation": "vertical",
-        "colorMode": "background"
+        "pieType": "pie",
+        "displayLabels": ["name", "value"],
+        "legend": { "displayMode": "table", "placement": "right", "values": ["value", "percent"] }
       }
     },
     {

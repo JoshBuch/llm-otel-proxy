@@ -15,3 +15,7 @@ claude.md
 # Internal tooling docs
 docs/superpowers/
 .playwright-mcp/
+
+# Debug screenshots from development sessions
+*.png
+llmotel-screenshot1.jpg

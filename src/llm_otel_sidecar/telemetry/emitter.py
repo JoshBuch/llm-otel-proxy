@@ -4,6 +4,7 @@ import json
 import logging
 import time
 from typing import Final
+from urllib.parse import urlparse
 
 from opentelemetry import trace
 from opentelemetry.exporter.otlp.proto.grpc.trace_exporter import OTLPSpanExporter
@@ -41,7 +42,8 @@ def init_tracer(otlp_endpoint: str) -> None:
     """Initialize the global OTel tracer provider. Call once at startup."""
     resource = Resource({SERVICE_NAME: "llm-otel-sidecar"})
     provider = TracerProvider(resource=resource)
-    exporter = OTLPSpanExporter(endpoint=otlp_endpoint, insecure=True)
+    insecure = urlparse(otlp_endpoint).scheme == "http"
+    exporter = OTLPSpanExporter(endpoint=otlp_endpoint, insecure=insecure)
     provider.add_span_processor(BatchSpanProcessor(exporter))
     trace.set_tracer_provider(provider)
 
@@ -79,7 +81,7 @@ def emit_span(parsed: ParsedSpan) -> None:
                 span.set_attribute(GEN_AI_USAGE_OUTPUT_TOKENS, parsed.output_tokens)
 
             if parsed.finish_reason is not None:
-                span.set_attribute(GEN_AI_RESPONSE_FINISH_REASONS, [parsed.finish_reason])
+                span.set_attribute(GEN_AI_RESPONSE_FINISH_REASONS, parsed.finish_reason)
 
             if parsed.error_type is not None:
                 span.set_attribute(ERROR_TYPE, parsed.error_type)

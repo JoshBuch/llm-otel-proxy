@@ -2,7 +2,7 @@ services:
   sidecar:
     build: .
     ports:
-      - "4000:4000"
+      - "127.0.0.1:4000:4000"
     environment:
       - OTLP_ENDPOINT=http://otel-collector:4317
       - OPENAI_UPSTREAM=https://models.inference.ai.azure.com

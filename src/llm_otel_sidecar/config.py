@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from pydantic import Field
+from urllib.parse import urlparse
+
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -14,6 +16,18 @@ class Settings(BaseSettings):
     anthropic_upstream: str = Field(default="https://api.anthropic.com")
     log_level: str = Field(default="INFO")
     capture_prompts: bool = Field(default=False)
+
+    @field_validator("openai_upstream", "anthropic_upstream")
+    @classmethod
+    def validate_upstream_url(cls, v: str) -> str:
+        parsed = urlparse(v)
+        if parsed.scheme not in ("http", "https"):
+            raise ValueError(
+                f"Upstream URL must use http or https scheme, got: {v!r}"
+            )
+        if not parsed.netloc:
+            raise ValueError(f"Upstream URL must include a host: {v!r}")
+        return v.rstrip("/")
 
 
 config = Settings()

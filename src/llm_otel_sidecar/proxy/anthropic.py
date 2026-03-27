@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import logging
+import posixpath
 import time
 from typing import Any, AsyncGenerator
 
@@ -23,7 +24,7 @@ router = APIRouter(prefix="/anthropic")
 # Module-level singleton httpx client
 _client = httpx.AsyncClient(
     timeout=httpx.Timeout(30.0),
-    follow_redirects=True,
+    follow_redirects=False,
 )
 
 # Headers to forward from the client request to upstream
@@ -112,6 +113,11 @@ def _parse_sse_buffer(buffer: list[bytes]) -> dict[str, Any]:
     return response_dict
 
 
+def _safe_path(path: str) -> str:
+    """Collapse any .. segments to prevent path traversal."""
+    return posixpath.normpath("/" + path).lstrip("/")
+
+
 @router.post("/{path:path}")
 async def proxy_anthropic(
     path: str,
@@ -119,7 +125,7 @@ async def proxy_anthropic(
     background_tasks: BackgroundTasks,
 ) -> Response:
     """Transparent proxy for all Anthropic POST endpoints."""
-    upstream_url = config.anthropic_upstream.rstrip("/") + "/" + path
+    upstream_url = config.anthropic_upstream + "/" + _safe_path(path)
     headers = _build_upstream_headers(request)
 
     # Read body once
