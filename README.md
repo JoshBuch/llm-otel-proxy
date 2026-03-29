@@ -83,7 +83,7 @@ Wait ~15 seconds for all services to be healthy. You'll see log lines from `side
 
 ### Step 2 — Open the dashboard
 
-Navigate to **[http://localhost:30025](http://localhost:30025)** and log in with `admin` / `admin`.
+Navigate to **[http://localhost:30025](http://localhost:30025)** and log in with `admin` / `admin` (default credentials, can be changed during first login).
 
 The **LLM Observatory** dashboard is pre-provisioned — no setup needed.
 
