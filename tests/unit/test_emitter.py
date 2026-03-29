@@ -167,18 +167,16 @@ def test_emit_span_does_not_raise_on_exception(
 
 
 # ---------------------------------------------------------------------------
-# Test 8: finish_reason set → GEN_AI_RESPONSE_FINISH_REASONS is a list/sequence
+# Test 8: finish_reason set → GEN_AI_RESPONSE_FINISH_REASONS is a plain string
 # ---------------------------------------------------------------------------
 
-def test_finish_reason_is_list(memory_exporter: InMemorySpanExporter) -> None:
+def test_finish_reason_is_string(memory_exporter: InMemorySpanExporter) -> None:
     parsed = _make_parsed(finish_reason="stop")
     emitter.emit_span(parsed)
 
     span = memory_exporter.get_finished_spans()[0]
     value = span.attributes[GEN_AI_RESPONSE_FINISH_REASONS]
-    # OTel SDK stores sequences as tuples internally; check it is sequence-like and contains "stop"
-    assert "stop" in value
-    assert len(value) == 1
+    assert value == "stop"
 
 
 # ---------------------------------------------------------------------------
